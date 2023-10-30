@@ -322,7 +322,7 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
     image_containing_wisps = multiply_by_miri_effective_area(image_containing_wisps)
 
     # Creating a 2D grid of wisp_multiplier and wisp_pedestal
-    wisp_multiplier, wisp_pedestal = np.linspace(0, 3, 180), np.linspace(0, 1, 2)
+    wisp_multiplier, wisp_pedestal = np.linspace(0, 3, 180), np.array([0.0])
     wisp_multiplier_grid, wisp_pedestal_grid = np.meshgrid(wisp_multiplier, wisp_pedestal)
 
     # Initializing a matrix to store the variance values
@@ -341,12 +341,13 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
                             Gaussian2DKernel(x_stddev=7, x_size=15))
         conv_wisp = multiply_by_miri_effective_area(conv_wisp)
 
-        image_visualization([conv_wisp, _wisp_template], 
-                            scale_data=_wisp_template,
-                            share_scale=True)
+        # image_visualization([conv_wisp, _wisp_template], 
+        #                     scale_data=_wisp_template,
+        #                     share_scale=True)
     
     else:
-        image_visualization([_wisp_template])
+        pass
+        # image_visualization([_wisp_template])
         
     # Calculating the variance for each point in the grid
     print("Calculating the variance for each point in the grid ......")

@@ -1,4 +1,9 @@
-from MIRI import *
+import warnings
+warnings.filterwarnings("ignore", module="photutils")
+warnings.filterwarnings("ignore", module="astropy")
+warnings.filterwarnings("ignore", module="numpy")
+
+from MIRI import MIRI_Image
 
 from utility import *
 
@@ -17,9 +22,10 @@ for fits_file in files_to_be_reduced:
     a = MIRI_Image("F770W", filename=fits_file)
     # a.run_MIRI_Detector1Pipeline()
     # a.run_MIRI_Image2Pipeline()
-    a.remove_pink_noise()
-    a.wisp_removal(visualize_frames=False, visualize_template=False, include_stars=False,)
-    break
+    # a.remove_pink_noise()
+    a.wisp_removal(visualize_frames=False, 
+                   visualize_template=False, 
+                   include_stars=False, conv=True)
 
 # all_path = sorted(glob.glob(f"/mnt/C/JWST/COSMOS/MIRI/F770W/jw*/jw*_cor_wsp.fits"))
 

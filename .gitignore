@@ -1,0 +1,11 @@
+*outlier*.fits
+*.png
+*.json
+*.log
+F770W/
+jw*.csv
+.dacecache
+__pycache__
+Test_area
+Config*
+Reduced

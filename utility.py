@@ -49,7 +49,7 @@ def fits_reader(filename, header=False, debug=False):
     hdul.close()
     return data
 
-def image_visualization(data, title=None, auto_color=True, 
+def image_visualization(data, title=None, auto_color=True, show=True,
                         color_style='jet', save=False, scale_data=None,
                         img_dpi=150, vmin_value=20, vmax_value=97,
                         output_path=None, share_scale=False):
@@ -112,7 +112,8 @@ def image_visualization(data, title=None, auto_color=True,
             ax.set_yticklabels([])
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])        
     
-    plt.show()
+    if show:
+        plt.show()
 
     if save:
         if output_path:

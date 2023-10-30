@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", module="photutils")
 warnings.filterwarnings("ignore", module="astropy")
 warnings.filterwarnings("ignore", module="numpy")
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib.pyplot")
 
 from MIRI import MIRI_Image
 

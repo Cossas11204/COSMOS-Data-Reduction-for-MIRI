@@ -198,7 +198,7 @@ class MIRI_Image():
         # visualize the original image, wisp template, and result image
         comp_list = [image_containing_wisps_for_vis, wisp, image_without_wisps_for_vis]
         comp_list = [multiply_by_miri_effective_area(data) for data in comp_list]
-        image_visualization(comp_list, auto_color=True, share_scale=True,
+        image_visualization(comp_list, auto_color=True, share_scale=True, show=False,
                             vmin_value=50, vmax_value=95, img_dpi=300, scale_data=image_containing_wisps_for_vis,
                             save=True, output_path=f'{self.path}/wisp_corrected_image.png',
                             title=[f"$\sigma={np.round(np.nanstd(sigma_clip(data, 3)), 3)}$ \n median={np.round(np.nanmedian(sigma_clip(data, 3)), 3)}" for data in comp_list]
@@ -207,7 +207,8 @@ class MIRI_Image():
         print("Saving data to *_wsp.fits ......")
         record_and_save_data(self.path, self.fitsname, 
                              image_without_wisps, calculate_pedestal(image_without_wisps), suffix='wsp')
-
+        print("*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-")
+        
 import jwst.associations
 import jwst.associations.mkpool
 from jwst.pipeline import Image3Pipeline

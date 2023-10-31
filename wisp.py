@@ -237,6 +237,7 @@ class Wisp():
         primaryhdu = fits.PrimaryHDU()
 
         # Create a FITS ImageHDU object from the data
+        median_wisp = multiply_by_miri_effective_area(self.median_wisp_template_frame, nan=False)
         median_wisp_hdu = fits.ImageHDU(self.median_wisp_template_frame)
         median_wisp_hdu.header['EXTNAME'] = ('WISP', 'Wisp template Design for COSMOS-Webb Field')
 

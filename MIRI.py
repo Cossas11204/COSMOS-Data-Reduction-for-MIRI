@@ -11,6 +11,8 @@ import numpy as np
 
 from jwst.pipeline import Detector1Pipeline, Image2Pipeline
 
+from photutils.background import Background2D, MedianBackground
+
 from utility import *
 
 from wisp import *
@@ -61,7 +63,7 @@ class MIRI_Image():
             with open(f"./Config_and_Logging/suppress_all_{self.detector_name}.cfg", "w") as file:
                 file.write(config)
 
-        print(f"NIR Obj. Initialized successfully.")
+        print(f"MIRI Obj. Initialized successfully.")
 
     def run_MIRI_Detector1Pipeline(self) -> None:
         # Run JWST Pipeline Stage 1 using uncalibrated raw data
@@ -183,13 +185,15 @@ class MIRI_Image():
             Wisp_obj.visualize_template()
 
         # Save the new wisp template
-        wisp = multiply_by_miri_effective_area(wisp[Wisp_obj.detector]['WISP'])
+        wisp = multiply_by_miri_effective_area(wisp[Wisp_obj.detector]['WISP'], nan=False)
         image_containing_wisps = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_cal.fits")[Wisp_obj.detector]['SCI']
 
         print("Scaling wisp and subtract ......")
         wisp_multiplier, wisp_pedestal = minimize_variance(wisp, image_containing_wisps, conv=conv)
         print(f"Wisp multiplier A = {wisp_multiplier}, Wisp pedestal B = {wisp_pedestal}")
         image_without_wisps = image_containing_wisps - wisp_multiplier * (wisp+wisp_pedestal)
+        image_without_wisps = multiply_by_miri_effective_area(image_without_wisps, nan=False)
+        # image_visualization(wisp)
 
         # mask sources
         image_without_wisps_for_vis = mask_sources(image_without_wisps)
@@ -197,7 +201,7 @@ class MIRI_Image():
 
         # visualize the original image, wisp template, and result image
         comp_list = [image_containing_wisps_for_vis, wisp, image_without_wisps_for_vis]
-        comp_list = [multiply_by_miri_effective_area(data) for data in comp_list]
+        comp_list = [multiply_by_miri_effective_area(data, nan=True) for data in comp_list]
         image_visualization(comp_list, auto_color=True, share_scale=True, show=False,
                             vmin_value=50, vmax_value=95, img_dpi=300, scale_data=image_containing_wisps_for_vis,
                             save=True, output_path=f'{self.path}/wisp_corrected_image.png',
@@ -209,6 +213,24 @@ class MIRI_Image():
                              image_without_wisps, calculate_pedestal(image_without_wisps), suffix='wsp')
         print("*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-")
         
+    def subtract_background(self):
+        file_name = os.path.join(self.path, f'{self.foldername}_cor_wsp.fits')
+        image = fits_reader(file_name)['image']['SCI']
+        bkg_estimator = MedianBackground()
+        bkg = Background2D(image, (50, 50), filter_size=(3, 3),
+                            bkg_estimator=bkg_estimator)
+        image -= bkg.background  # subtract the background
+
+        path = "/".join(file_name.split('/')[:-1])
+        fits_file = remove_file_suffix(file_name.split('/')[-1])
+
+        bkg_image = multiply_by_miri_effective_area(bkg.background, nan=False)
+        bkg_sub_image = multiply_by_miri_effective_area(image, nan=False)
+        
+        record_and_save_data(path, fits_file, bkg_image, pedestal=None, suffix='bkg')
+        record_and_save_data(path, fits_file, bkg_sub_image, pedestal=None, suffix='bkg_sub')
+        
+
 import jwst.associations
 import jwst.associations.mkpool
 from jwst.pipeline import Image3Pipeline
@@ -270,19 +292,20 @@ def run_Pipeline_3(instrument, _filter, obs_num):
                                   output_dir=f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/",
                                   logcfg = f'/mnt/C/JWST/COSMOS/{instrument}/Config_and_Logging/Pipeline3.cfg' ,
                                   save_results=True,
-                                  steps={
-                                         'tweakreg': {'fitgeometry': 'rshift'
-                                                      },
-                                         'skymatch': {'skymethod':'match',
-                                                      'subtract': True,
-                                                      },
-                                         'resample': {'kernel': 'lanczos3', 
-                                                      'fillval': f'{0}', 
-                                                      'weight_type': 'ivm',
-                                                      },
-                                         'outlier_detection': {'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
-                                                               },
-                                         'source_catalog': {'skip': True,
-                                                            },
-                                        }
+                                #   steps={
+                                #          'tweakreg': {'fitgeometry': 'rshift',
+                                #                       'use_custom_catalogs': False, 'abs_refcat': 'GAIADR2'
+                                #                       },
+                                #          'skymatch': {'skymethod':'global+match',
+                                #                       'subtract': False,
+                                #                       },
+                                #          'resample': {'kernel': 'lanczos3', 
+                                #                       'fillval': f'{0}', 
+                                #                       'weight_type': 'exptime',
+                                #                       },
+                                #          'outlier_detection': {'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
+                                #                                },
+                                #          'source_catalog': {'skip': True,
+                                #                             },
+                                #         }
                                   )

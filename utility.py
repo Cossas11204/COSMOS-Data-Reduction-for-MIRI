@@ -282,15 +282,18 @@ def remove_file_suffix(filename) -> str:
         Segmentation map                                segm
     """
 
-    suffix = ['uncal', 'ramp', 'rate', 'rateints', 'bsub', 'bsubints',
+    suffix = ['uncal', 'ramp', 'rate', 'rateints', 'bsub', 'bsubints', 'cor_wsp', 'cor_cal',
               'cal', 'calints', 'crf', 'crfints', 'i2d', 'cat', 'segm']
     
     for string in suffix:
-        result = re.sub(rf'_{string}.fits', '', filename)
-        if result:
+        pattern = re.compile(rf'_{string}\.fits$')
+        new_filename, n = pattern.subn('', filename)
+        if n > 0:
+            # print(f'Suffix found and removed: {string}')
+            # print('New filename:', new_filename)
             break
 
-    return result
+    return new_filename
 
 def mask_sources(img_data, sigma_values=[5, 2], snr=3):
     sources = tiered_source_detection(img_data, sigma_values=sigma_values, snr=snr)
@@ -300,8 +303,17 @@ def mask_sources(img_data, sigma_values=[5, 2], snr=3):
     return masked_image
 
 def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cal'):
-    hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cal.fits")
-    hdul[1].data = np.array(corrected_image-pedestal)
+    if suffix in ['bkg_sub']:
+        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cor_wsp.fits")
+    else:
+        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cal.fits")
+    
+    if pedestal is not None:
+        hdul[1].data = np.array(corrected_image-pedestal)
+
+    else:
+        hdul[1].data = np.array(corrected_image)
+        
     hdul[1].header['PED_VAL'] = pedestal
     hdul.writeto(f"{path}/{remove_file_suffix(fitsname)}_cor_{suffix}.fits", overwrite=True)
     hdul.close()
@@ -337,7 +349,8 @@ def sigma_clip_replace_with_median(arr, sigma=3):
     
     return arr_copy
 
-def extract_miri_effective_area(img_data):
+def extract_miri_effective_area():
+    img_data = fits_reader("/mnt/C/JWST/COSMOS/MIRI/F770W/jw01727009001_02201_00001_mirimage/jw01727009001_02201_00001_mirimage_cor_cal.fits")['image']['SCI']
     final_cor_image = np.zeros_like(img_data)
     eff_FULL = np.ones_like(img_data)
 
@@ -364,20 +377,58 @@ def extract_miri_effective_area(img_data):
     final_cor_image[165:318, 376:   ] = img_data[165:318, 376:   ]
     final_cor_image[   :165, 355:   ] = img_data[   :165, 355:   ]
 
-    eff_FULL[745:   ,    :279] = np.nan
-    eff_FULL[   :682,    :232] = np.nan
-    eff_FULL[682:745,    :279] = np.nan
-    eff_FULL[   :   , 279:355] = np.nan
-    eff_FULL[   :682, 232:279] = np.nan
+    # image_visualization([eff_FULL])
+    if not os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits"):
+        eff_FULL[745:   ,    :279] = np.nan
+        eff_FULL[   :682,    :232] = np.nan
+        eff_FULL[682:745,    :279] = np.nan
+        eff_FULL[   :   , 279:355] = np.nan
+        eff_FULL[   :682, 232:279] = np.nan
 
-    eff_FULL[165:435, 355:376] = np.nan
-    eff_FULL[318:379, 376:388] = np.nan
-    eff_FULL[336:375, 388:417] = np.nan
+        eff_FULL[165:435, 355:376] = np.nan
+        eff_FULL[318:379, 376:388] = np.nan
+        eff_FULL[336:375, 388:417] = np.nan
 
-    image_visualization([eff_FULL])
+        # Create a FITS PrimaryHDU object
+        primaryhdu = fits.PrimaryHDU()
 
-    return eff_FULL
+        # Create a FITS ImageHDU object from the data
+        miri_eff_area_hdu = fits.ImageHDU(eff_FULL)
+        miri_eff_area_hdu.header['EXTNAME'] = ('EFF_AREA', 'Effective Area of MIRI for COSMOS-Webb Field')
+        miri_eff_area_hdu.header['MASK'] = ('np.nan', 'Mask Type (0.0 or np.nan)')
 
-def multiply_by_miri_effective_area(img_data):
-    eff_area = fits.open("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area.fits")[1].data
-    return np.multiply(img_data, eff_area)
+        # Create a FITS HDU list and save it to a file
+        hdul = fits.HDUList([primaryhdu, miri_eff_area_hdu])
+        hdul.writeto("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits", overwrite=True)
+
+    if not os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits"):
+        eff_FULL[745:   ,    :279] = 0.0
+        eff_FULL[   :682,    :232] = 0.0
+        eff_FULL[682:745,    :279] = 0.0
+        eff_FULL[   :   , 279:355] = 0.0
+        eff_FULL[   :682, 232:279] = 0.0
+
+        eff_FULL[165:435, 355:376] = 0.0
+        eff_FULL[318:379, 376:388] = 0.0
+        eff_FULL[336:375, 388:417] = 0.0
+
+        # Create a FITS PrimaryHDU object
+        primaryhdu = fits.PrimaryHDU()
+
+        # Create a FITS ImageHDU object from the data
+        miri_eff_area_hdu = fits.ImageHDU(eff_FULL)
+        miri_eff_area_hdu.header['EXTNAME'] = ('EFF_AREA', 'Effective Area of MIRI for COSMOS-Webb Field')
+        miri_eff_area_hdu.header['MASK'] = ('0.0', 'Mask Type (0.0 or np.nan)')
+
+        # Create a FITS HDU list and save it to a file
+        hdul = fits.HDUList([primaryhdu, miri_eff_area_hdu])
+        hdul.writeto("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits", overwrite=True)
+
+def multiply_by_miri_effective_area(img_data, nan=True):
+    if nan:
+        eff_area = fits.open("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits")[1].data
+
+    else:
+        eff_area = fits.open("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits")[1].data
+
+    return np.multiply(eff_area, img_data)

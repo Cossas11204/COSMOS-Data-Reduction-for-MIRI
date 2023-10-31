@@ -12,7 +12,6 @@ from pink_noise import *
 
 import glob
 
-
 files_to_be_reduced = sorted(glob.glob(rf"/mnt/C/JWST/COSMOS/MIRI/F770W/jw*/*_uncal.fits"))
 
 for fits_file in files_to_be_reduced:
@@ -24,9 +23,10 @@ for fits_file in files_to_be_reduced:
     # a.run_MIRI_Detector1Pipeline()
     # a.run_MIRI_Image2Pipeline()
     # a.remove_pink_noise()
-    a.wisp_removal(visualize_frames=False, 
-                   visualize_template=False, 
-                   include_stars=False, conv=True)
+    # a.wisp_removal(visualize_frames=False, 
+    #                visualize_template=False, 
+    #                include_stars=False, conv=True)
+    a.subtract_background()
 
 # all_path = sorted(glob.glob(f"/mnt/C/JWST/COSMOS/MIRI/F770W/jw*/jw*_cor_wsp.fits"))
 

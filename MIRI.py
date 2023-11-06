@@ -42,7 +42,8 @@ class MIRI_Image():
         
         # Delete all unrevelent files when restart
         if restart:
-            os.system(f"find {self.path} -type f -not -name '*_uncal.fits' -exec rm {{}} \;")
+            # os.system(f"find {self.path} -type f -not -name '*_uncal.fits' -exec rm {{}} \;")
+            pass
         
         # Set up the logger for this MIRI Object
         if not os.path.exists(f'./Config_and_Logging'):
@@ -202,10 +203,11 @@ class MIRI_Image():
         # visualize the original image, wisp template, and result image
         comp_list = [image_containing_wisps_for_vis, wisp, image_without_wisps_for_vis]
         comp_list = [multiply_by_miri_effective_area(data, nan=True) for data in comp_list]
+        title = [f"sigma ={np.round(np.nanstd(sigma_clip(data, 3)), 3)} \n median={np.round(np.nanmedian(sigma_clip(data, 3)), 3)}" for data in comp_list]
         image_visualization(comp_list, auto_color=True, share_scale=True, show=False,
                             vmin_value=50, vmax_value=95, img_dpi=300, scale_data=image_containing_wisps_for_vis,
                             save=True, output_path=f'{self.path}/wisp_corrected_image.png',
-                            title=[f"$\sigma={np.round(np.nanstd(sigma_clip(data, 3)), 3)}$ \n median={np.round(np.nanmedian(sigma_clip(data, 3)), 3)}" for data in comp_list]
+                            title=title
                             )
 
         print("Saving data to *_wsp.fits ......")
@@ -230,6 +232,25 @@ class MIRI_Image():
         record_and_save_data(path, fits_file, bkg_image, pedestal=None, suffix='bkg')
         record_and_save_data(path, fits_file, bkg_sub_image, pedestal=None, suffix='bkg_sub')
         
+    def subtract_brighten_columns(self,):
+        data_dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_bkg_sub.fits")
+        img_data = data_dict['image']['SCI']
+        img = multiply_by_miri_effective_area(img_data, nan=True)
+
+        masked_img = mask_sources(img, nan=True)
+        masked_img = sigma_clip(masked_img)
+        masked_img = np.copy(masked_img)
+
+        col_median = np.nanmedian(masked_img, axis=1)
+        col_median = col_median.reshape(-1, 1)  # Correct the shape to (1024, 1)
+        col_median = np.repeat(col_median, masked_img.shape[1], axis=1)  # Repeat along columns
+
+        smoothed_col_med = convolve(col_median, Box2DKernel(width=5))
+        sub_img = multiply_by_miri_effective_area(img_data - smoothed_col_med, nan=False)
+        record_and_save_data(self.path, 
+                             self.fitsname, 
+                             img, pedestal=None, 
+                             suffix='bri_col_sub')
 
 import jwst.associations
 import jwst.associations.mkpool
@@ -247,8 +268,8 @@ def sort_corrected_images(instrument, _filter) -> None:
 
         shutil.copyfile(file_name, os.path.join(dir_path, file_name.split("/")[-1]))
 
-def sort_wisp_corrected_images(instrument, _filter) -> None:
-    all_path = sorted(glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/jw*/jw*_cor_wsp.fits"))
+def sort_images(instrument, _filter, suffix) -> None:
+    all_path = sorted(glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/jw*/jw*_{suffix}.fits"))
 
     for file_name in all_path:
         obs_num = file_name.split("/")[-1].split("_")[0].strip("jw")[5:8] 
@@ -259,7 +280,7 @@ def sort_wisp_corrected_images(instrument, _filter) -> None:
 
         shutil.copyfile(file_name, os.path.join(dir_path, file_name.split("/")[-1]))
 
-def run_Pipeline_3(instrument, _filter, obs_num):
+def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     """
     Creates association file and runs JWST Image3Pipeline with the default settings.
 
@@ -274,7 +295,7 @@ def run_Pipeline_3(instrument, _filter, obs_num):
         os.mkdir(f"/mnt/C/JWST/COSMOS/{instrument}/Reduced")
 
     # Set the parameters for an Level-3 association 
-    association_pool = jwst.associations.mkpool.mkpool(glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/o{obs_num}/*_cor_wsp.fits"))
+    association_pool = jwst.associations.mkpool.mkpool(glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/o{obs_num}/*_{suffix}.fits"))
     association_rules = jwst.associations.registry.AssociationRegistry()
     association = jwst.associations.generate(association_pool, association_rules)[0]
     
@@ -292,20 +313,21 @@ def run_Pipeline_3(instrument, _filter, obs_num):
                                   output_dir=f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/",
                                   logcfg = f'/mnt/C/JWST/COSMOS/{instrument}/Config_and_Logging/Pipeline3.cfg' ,
                                   save_results=True,
-                                #   steps={
-                                #          'tweakreg': {'fitgeometry': 'rshift',
-                                #                       'use_custom_catalogs': False, 'abs_refcat': 'GAIADR2'
-                                #                       },
-                                #          'skymatch': {'skymethod':'global+match',
-                                #                       'subtract': False,
-                                #                       },
-                                #          'resample': {'kernel': 'lanczos3', 
-                                #                       'fillval': f'{0}', 
-                                #                       'weight_type': 'exptime',
-                                #                       },
-                                #          'outlier_detection': {'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
-                                #                                },
-                                #          'source_catalog': {'skip': True,
-                                #                             },
-                                #         }
+                                  steps={
+                                         'tweakreg': {'fitgeometry': 'rshift',
+                                                      'use_custom_catalogs': False,# 'abs_refcat': 'GAIADR2'
+                                                      },
+                                         'skymatch': {'skymethod':'global+match',
+                                                      'subtract': False,
+                                                      },
+                                         'resample': {'kernel': 'lanczos3', 
+                                                      'fillval': f'{0}', 
+                                                      'weight_type': 'exptime',
+                                                      },
+                                         'outlier_detection': {#'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
+                                                               'in_memory' : True,
+                                                               },
+                                         'source_catalog': {'skip': True,
+                                                            },
+                                        }
                                   )

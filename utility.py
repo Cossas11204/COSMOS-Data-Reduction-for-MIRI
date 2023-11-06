@@ -11,7 +11,7 @@ from photutils import detect_sources, detect_threshold
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.convolution import convolve
-from astropy.convolution import Gaussian2DKernel
+from astropy.convolution import Gaussian2DKernel, Box2DKernel
 
 import datetime
 
@@ -295,16 +295,19 @@ def remove_file_suffix(filename) -> str:
 
     return new_filename
 
-def mask_sources(img_data, sigma_values=[5, 2], snr=3):
+def mask_sources(img_data, sigma_values=[5, 2], snr=3, nan=False):
     sources = tiered_source_detection(img_data, sigma_values=sigma_values, snr=snr)
     mask = np.logical_not(sources).astype(float)
+    if nan:
+        mask = np.where(mask==0, np.nan, mask) 
     masked_image = np.multiply(mask, img_data)
 
     return masked_image
 
-def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cal'):
-    if suffix in ['bkg_sub']:
+def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cor_cal'):
+    if suffix in ['bkg_sub', 'bri_sub']:
         hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cor_wsp.fits")
+        
     else:
         hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cal.fits")
     
@@ -315,7 +318,7 @@ def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cal'
         hdul[1].data = np.array(corrected_image)
         
     hdul[1].header['PED_VAL'] = pedestal
-    hdul.writeto(f"{path}/{remove_file_suffix(fitsname)}_cor_{suffix}.fits", overwrite=True)
+    hdul.writeto(f"{path}/{remove_file_suffix(fitsname)}_{suffix}.fits", overwrite=True)
     hdul.close()
 
 def calculate_pedestal(image):
@@ -432,3 +435,7 @@ def multiply_by_miri_effective_area(img_data, nan=True):
         eff_area = fits.open("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits")[1].data
 
     return np.multiply(eff_area, img_data)
+
+def convert_MJYSR_to_JYPIX(input_data):
+    convert_coefficient = 10**6 * 10**-14 
+    return input_data * convert_coefficient

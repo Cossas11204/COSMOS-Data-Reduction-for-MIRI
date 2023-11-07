@@ -135,23 +135,19 @@ class MIRI_Image():
     def wisp_removal(self, debug=False, conv=False,
                     visualize_frames=False, 
                     visualize_template=False,
-                    include_stars=False,) -> np.ndarray:
+                    include_stars=False,) -> None:
         """
         Load/create a wisp template based on the given detector or _filter.
         Then Subtract it from the image containing wisps.
 
         Args:
-            detector(str): The detector name of desire wisp template.
-            _filter(str): The _filter of interest wisp template.
-            wisp_number(int/str): The number of images to be used to extract wisp. Set to 'all' to use all images.
             visualize_frames(bool): Whether to visualize all frames constructing the wisp template.
             visualize_template(bool): Whether to visualize the wisp template.
-            subtract(bool): Set to True to remove wisp from the input image.
             include_stars(bool): We strongly suggest to set this to be False. 
             If an image contains a bright star, the psf of the star will be inprinted in the wisp template.
 
         Returns:
-            Wisp-subtracted image(np.ndarray).
+            None
         """
         # initialize the wisp object
         Wisp_obj = Wisp(self.filter, self.mode)
@@ -287,10 +283,11 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     Args:
         obs_num(int): Observation number for which data should be combined. 
         filter(str): Filters avaliable in the field. Could be: 'F115W', 'F150W', 'F277W', 'F444W', or 'F770W'.
-        
+    
     Return:	
         None
     """
+
     if not os.path.exists(f"/mnt/C/JWST/COSMOS/{instrument}/Reduced"):
         os.mkdir(f"/mnt/C/JWST/COSMOS/{instrument}/Reduced")
 
@@ -300,7 +297,7 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     association = jwst.associations.generate(association_pool, association_rules)[0]
     
     file_name, serialized = association.dump()
-    file_name = f"./{_filter}/o{obs_num}/{file_name}"
+    file_name = f"/mnt/C/JWST/COSMOS/NIRCAM/{_filter}/o{obs_num}/{file_name}"
 
     with open(file_name, 'w') as file_handle:
         file_handle.write(serialized)
@@ -324,7 +321,7 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
                                                       'fillval': f'{0}', 
                                                       'weight_type': 'exptime',
                                                       },
-                                         'outlier_detection': {#'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
+                                         'outlier_detection': {# 'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
                                                                'in_memory' : True,
                                                                },
                                          'source_catalog': {'skip': True,

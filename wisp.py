@@ -1,3 +1,4 @@
+
 import os, glob, json
 
 import matplotlib.pyplot as plt
@@ -388,4 +389,3 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
     # plt.show()
     
     return min_var_multiplier, min_var_pedestal
-

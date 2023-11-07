@@ -322,7 +322,6 @@ def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cor_
     hdul.close()
 
 def calculate_pedestal(image):
-    # unmasked_values = image[np.logical_not(np.isnan(image))]
     med = np.nanmedian(image.flatten())
     return med
 

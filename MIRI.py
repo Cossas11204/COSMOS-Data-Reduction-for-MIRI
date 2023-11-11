@@ -35,11 +35,11 @@ class MIRI_Image():
             self.mode = self.detector_name[-5:]
             self.obs_num = self.foldername.split('_')[0][7:10]
             self.vis_num = self.foldername.split('_')[0][10:13]
-            self.path = f"./{self.filter}/{self.foldername}"
+            self.path = f"/mnt/C/JWST/COSMOS/MIRI/{self.filter}/{self.foldername}"
 
             print(f"Initializing MIRI Obj. for: {self.path}/{self.fitsname}")
             print(f"Observation: o{self.obs_num} Visit: {self.vis_num} Detector: {self.detector_name}")
-        
+            
         # Delete all unrevelent files when restart
         if restart:
             # os.system(f"find {self.path} -type f -not -name '*_uncal.fits' -exec rm {{}} \;")
@@ -89,7 +89,7 @@ class MIRI_Image():
         
     def remove_pink_noise(self) -> None:
         dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cal.fits")
-        img_data = dict['image']['SCI']
+        img_data = dict[f'{self.mode}']['SCI']
         final_cor_image = np.zeros(img_data.shape)
         
         # cutout of different parts of miri image detector
@@ -206,14 +206,14 @@ class MIRI_Image():
                             title=title
                             )
 
-        print("Saving data to *_wsp.fits ......")
-        record_and_save_data(self.path, self.fitsname, 
+        print("Saving data to *_cor_wsp.fits ......")
+        record_and_save_data(self.path, remove_file_suffix(self.fitsname), 
                              image_without_wisps, calculate_pedestal(image_without_wisps), suffix='wsp')
         print("*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-")
         
     def subtract_background(self):
         file_name = os.path.join(self.path, f'{self.foldername}_cor_wsp.fits')
-        image = fits_reader(file_name)['image']['SCI']
+        image = fits_reader(file_name)[f'{self.mode}']['SCI']
         bkg_estimator = MedianBackground()
         bkg = Background2D(image, (50, 50), filter_size=(3, 3),
                             bkg_estimator=bkg_estimator)
@@ -229,7 +229,7 @@ class MIRI_Image():
         record_and_save_data(path, fits_file, bkg_sub_image, pedestal=None, suffix='bkg_sub')
         
     def subtract_brighten_columns(self,):
-        data_dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_bkg_sub.fits")
+        data_dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_bkg_sub.fits")
         img_data = data_dict['image']['SCI']
         img = multiply_by_miri_effective_area(img_data, nan=True)
 

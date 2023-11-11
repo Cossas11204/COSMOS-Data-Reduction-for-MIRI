@@ -15,13 +15,13 @@ from astropy.convolution import Gaussian2DKernel, Box2DKernel
 
 import datetime
 
-def fits_reader(filename, header=False, debug=False):
+def fits_reader(filename, header=False, debug=True):
     """
     Read a FITS file.
 
     Args:
         filename (str): The name of the FITS file.
-        index (int, optional): The index of the FITS file. Defaults to 1.
+        debug (bool, optional): Print the details for debugging. Defaults to False.
     
     Return:
         Data (dictionary): A dictionary that contains every image in the FITS file.
@@ -153,20 +153,22 @@ def image_histogram(data, title=None, bins=np.logspace(-5, 2, 100),
     num_cols = int(np.floor(num_images / num_rows))
 
     fig = plt.figure(figsize=(16,8))
+    ax = fig.add_subplot()
     
     for i, d in enumerate(data, start=1):
         if not share:
             ax = fig.add_subplot(num_rows, num_cols, i)
 
-        ax.hist(d.flatten(), bins=bins,
-                alpha=alpha, histtype='step', lw=1.5,
-                label=title[i-1])
-        
-        if x_log:
-            ax.set_xscale('log')
-        
-        if y_log:
-            ax.set_yscale('log')
+        else:
+            ax.hist(d.flatten(), bins=bins,
+                    alpha=alpha, histtype='step', lw=1.5,
+                    label=title[i-1])
+            
+            if x_log:
+                ax.set_xscale('log')
+            
+            if y_log:
+                ax.set_yscale('log')
 
         ax.legend()
 
@@ -174,9 +176,9 @@ def image_histogram(data, title=None, bins=np.logspace(-5, 2, 100),
     # ax.set_yticks([])
     # ax.set_xticklabels([])
     # ax.set_yticklabels([])
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])     
-    plt.show()    
-    
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
 def load_fits(path):
     with fits.open(path) as hdul: 
         image = hdul[1].data

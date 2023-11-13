@@ -9,6 +9,8 @@ import shutil
 
 import numpy as np
 
+from pprint import pprint
+
 from jwst.pipeline import Detector1Pipeline, Image2Pipeline
 
 from photutils.background import Background2D, MedianBackground
@@ -65,6 +67,9 @@ class MIRI_Image():
                 file.write(config)
 
         print(f"MIRI Obj. Initialized successfully.")
+
+    def info(self):
+        pprint(vars(self))
 
     def run_MIRI_Detector1Pipeline(self) -> None:
         # Run JWST Pipeline Stage 1 using uncalibrated raw data

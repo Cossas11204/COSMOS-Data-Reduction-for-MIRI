@@ -306,13 +306,19 @@ def mask_sources(img_data, sigma_values=[5, 2], snr=3, nan=False):
 
     return masked_image
 
-def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix='cor_cal'):
+def record_and_save_data(path, fitsname, corrected_image, pedestal, suffix=""):
     if suffix in ['bkg_sub', 'bri_sub']:
         hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cor_wsp.fits")
         
-    else:
-        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cal.fits")
+    elif suffix in ['cor']:
+        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_rate.fits")
+
+    elif suffix in ['cor_cal']:
+        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cor.fits")
     
+    else:
+        hdul = fits.open(f"{path}/{remove_file_suffix(fitsname)}_cor_cal.fits")
+
     if pedestal is not None:
         hdul[1].data = np.array(corrected_image-pedestal)
 
@@ -440,3 +446,20 @@ def multiply_by_miri_effective_area(img_data, nan=True):
 def convert_MJYSR_to_JYPIX(input_data):
     convert_coefficient = 10**6 * 10**-14 
     return input_data * convert_coefficient
+
+def genPSF(filters):
+    import webbpsf
+
+    if filters in ["F560W", "F770W", "F1000W", "F1280W", "F1500W", "F1800W", "F2100W"]:
+        instrument = webbpsf.MIRI()
+        case = "MIRI"
+    else:
+        instrument = webbpsf.NIRCam()
+        case = "NIRCAM"
+    
+    for band in filters:
+        if not os.path.exists(f"/mnt/c/JWST/COSMOS/{case}/{band}_psf.fits"):
+            instrument.filter = band
+            instrument.calc_psf(oversample=1, fov_arcsec=4).writeto(
+                f"{band}_psf.fits", overwrite=True
+            )

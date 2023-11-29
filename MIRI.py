@@ -23,13 +23,14 @@ from pink_noise import remove_striping, calculate_pedestal
 
 
 class MIRI_Image():
-    def __init__(self, filter, filename=None, restart=False) -> None:
+    def __init__(self, filter, filename=None, restart=False, verbose=False) -> None:
         # Set the basic parameters for file/path naming
         if not filename.endswith('.fits'):
             raise ValueError("Filename should be ended with fits!!!")
         elif not filename:
             raise ValueError("Please enter your filename!!!")
         else:
+            self.instrument = "MIRI"
             self.fitsname = filename
             self.filter = filter 
             self.foldername = remove_file_suffix(filename) # remove filenaming conventions
@@ -38,6 +39,7 @@ class MIRI_Image():
             self.obs_num = self.foldername.split('_')[0][7:10]
             self.vis_num = self.foldername.split('_')[0][10:13]
             self.path = f"/mnt/C/JWST/COSMOS/MIRI/{self.filter}/{self.foldername}"
+            self.verbose = verbose
 
             print(f"Initializing MIRI Obj. for: {self.path}/{self.fitsname}")
             print(f"Observation: o{self.obs_num} Visit: {self.vis_num} Detector: {self.detector_name}")
@@ -84,7 +86,7 @@ class MIRI_Image():
         
     def run_MIRI_Image2Pipeline(self) -> None:
         # Run JWST Pipeline Stage 2 with result from Detector1Pipeline
-        result = Image2Pipeline.call(f"{self.path}/{remove_file_suffix(self.fitsname)}_rate.fits",
+        result = Image2Pipeline.call(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor.fits",
                                         output_dir=f"{self.path}/", 
                                         save_results=True,
                                         logcfg = f'./Config_and_Logging/suppress_all_{self.detector_name}.cfg' ,
@@ -93,7 +95,7 @@ class MIRI_Image():
                                         )
         
     def remove_pink_noise(self) -> None:
-        dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cal.fits")
+        dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_rate.fits")
         img_data = dict[f'{self.mode}']['SCI']
         final_cor_image = np.zeros(img_data.shape)
         
@@ -132,7 +134,7 @@ class MIRI_Image():
                             vmin_value=20, vmax_value=95)
     
         record_and_save_data(self.path, self.fitsname, 
-                             final_cor_image, calculate_pedestal(final_cor_image), suffix='cal')
+                             final_cor_image, calculate_pedestal(final_cor_image), suffix='cor')
 
     def load_corrected_data(self) -> dict:
         return fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_cal.fits")
@@ -213,7 +215,7 @@ class MIRI_Image():
 
         print("Saving data to *_cor_wsp.fits ......")
         record_and_save_data(self.path, remove_file_suffix(self.fitsname), 
-                             image_without_wisps, calculate_pedestal(image_without_wisps), suffix='wsp')
+                             image_without_wisps, calculate_pedestal(image_without_wisps), suffix='cor_wsp')
         print("*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-.*-")
         
     def subtract_background(self):
@@ -252,6 +254,15 @@ class MIRI_Image():
                              self.fitsname, 
                              img, pedestal=None, 
                              suffix='bri_col_sub')
+
+    def gather_by_obs(self, suffix):
+        if not os.path.exists(f"/mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/o{self.obs_num}/"):
+            os.mkdir(f"/mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/o{self.obs_num}/", 0o777)
+        
+        if self.verbose:
+            print(f"Copying {self.path}/{self.foldername}_{suffix}.fits to /mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/o{self.obs_num}/.")
+        os.system(f"cp {self.path}/{self.foldername}_{suffix}.fits /mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/o{self.obs_num}/")
+
 
 import jwst.associations
 import jwst.associations.mkpool
@@ -302,7 +313,7 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     association = jwst.associations.generate(association_pool, association_rules)[0]
     
     file_name, serialized = association.dump()
-    file_name = f"/mnt/C/JWST/COSMOS/NIRCAM/{_filter}/o{obs_num}/{file_name}"
+    file_name = f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/o{obs_num}/{file_name}"
 
     with open(file_name, 'w') as file_handle:
         file_handle.write(serialized)

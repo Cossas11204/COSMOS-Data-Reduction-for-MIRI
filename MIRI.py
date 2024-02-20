@@ -1,6 +1,6 @@
 import os
 os.environ['CRDS_CONTEXT'] = ''
-os.environ['CRDS_PATH'] = '/mnt/D/D220624-data/JWST_data/crds_cache/'
+os.environ['CRDS_PATH'] = '/mnt/D/JWST_data/crds_cache/'
 os.environ['CRDS_SERVER_URL'] = 'https://jwst-crds.stsci.edu'
 
 import glob
@@ -12,6 +12,7 @@ import numpy as np
 from pprint import pprint
 
 from jwst.pipeline import Detector1Pipeline, Image2Pipeline
+from stdatamodels.jwst.datamodels.dqflags import pixel
 
 from photutils.background import Background2D, MedianBackground
 
@@ -86,13 +87,58 @@ class MIRI_Image():
         
     def run_MIRI_Image2Pipeline(self) -> None:
         # Run JWST Pipeline Stage 2 with result from Detector1Pipeline
-        result = Image2Pipeline.call(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor.fits",
+        result = Image2Pipeline.call(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_lyot.fits",
                                         output_dir=f"{self.path}/", 
                                         save_results=True,
                                         logcfg = f'./Config_and_Logging/suppress_all_{self.detector_name}.cfg' ,
                                         steps={
                                                 }
                                         )
+          
+        result = Image2Pipeline.call(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_main.fits",
+                                        output_dir=f"{self.path}/", 
+                                        save_results=True,
+                                        logcfg = f'./Config_and_Logging/suppress_all_{self.detector_name}.cfg' ,
+                                        steps={
+                                                }
+                                        )
+
+
+        main_data = fits.open(f"{self.path}/{self.foldername}_cor_lyot_cal.fits")
+        lyot_data = fits.open(f"{self.path}/{self.foldername}_cor_main_cal.fits")
+        
+        print(main_data, lyot_data)
+        
+        for hdu_ind in [1, 2, 3, 4, 5, 6, 7]:
+            main_data[hdu_ind].data[745:, :279] = lyot_data[hdu_ind].data[745:, :279]
+
+        main_data.writeto(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_cal.fits", overwrite=True)
+    
+    def modify_DQ_array_for_lyot(self):
+        hdulist = fits.open(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor.fits")
+        dqarray = hdulist[3].data.copy()        
+        mask_value = pixel["DO_NOT_USE"] + pixel["NON_SCIENCE"]
+        
+        # cutout of 4qpm of miri image detector
+        dqarray[   :682,    :232] = mask_value
+        
+        # empty space between each parts of miri image detector
+        dqarray[682:745,    :279] = mask_value
+        dqarray[   :   , 279:362] = mask_value
+        dqarray[   :682, 232:279] = mask_value
+        
+        dqarray2 = dqarray.copy()
+        
+        # mask of lyot of miri image detector
+        dqarray[745:   ,    :279] = mask_value
+        hdulist[3].data = dqarray
+        hdulist.writeto(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_main.fits", overwrite=True)
+        
+        dqarray2[   :745,    :   ] = mask_value
+        dqarray2[   :   , 279:   ] = mask_value
+        hdulist[3].data = dqarray2
+        hdulist.writeto(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_lyot.fits", overwrite=True)
+        hdulist.close()
         
     def remove_pink_noise(self) -> None:
         dict = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_rate.fits")
@@ -102,8 +148,16 @@ class MIRI_Image():
         # cutout of different parts of miri image detector
         un_cor_miri_corona_lyot = img_data[745:, :279]
         un_cor_miri_corona_4qpm = img_data[:682, :232]
-        un_cor_miri_img = img_data[:, 400:]
-
+        
+        un_cor_miri_img = np.zeros(img_data.shape)
+        un_cor_miri_img[435:   , 362:   ] = img_data[435:   , 362:   ]
+        un_cor_miri_img[379:435, 376:   ] = img_data[379:435, 376:   ]
+        un_cor_miri_img[375:379, 388:   ] = img_data[375:379, 388:   ]
+        un_cor_miri_img[336:375, 417:   ] = img_data[336:375, 417:   ]
+        un_cor_miri_img[318:336, 388:   ] = img_data[318:336, 388:   ]
+        un_cor_miri_img[165:318, 376:   ] = img_data[165:318, 376:   ]
+        un_cor_miri_img[   :165, 362:   ] = img_data[   :165, 362:   ]
+        
         # mask sources for different parts of miri image detector
         masked_corona_lyot_image = mask_sources(un_cor_miri_corona_lyot, sigma_values=[5, 2], snr=3)
         masked_corona_4qpm_image = mask_sources(un_cor_miri_corona_4qpm, sigma_values=[5, 2], snr=3)
@@ -123,10 +177,18 @@ class MIRI_Image():
         final_cor_image[682:745, :279] = 0
         final_cor_image[:, 279:350] = 0
         final_cor_image[:682, 232:279] = 0
-        final_cor_image[745:, :279] = 0
-        final_cor_image[:682, :232] = 0
-        final_cor_image[:, 400:] = miri_img
+        final_cor_image[745:, :279] = miri_corona_lyot
+        final_cor_image[:682, :232] = 0 # masked_corona_4qpm_image
 
+        # MIRI Main array 
+        final_cor_image[435:   , 362:   ] = miri_img[435:   , 362:   ]
+        final_cor_image[379:435, 376:   ] = miri_img[379:435, 376:   ]
+        final_cor_image[375:379, 388:   ] = miri_img[375:379, 388:   ]
+        final_cor_image[336:375, 417:   ] = miri_img[336:375, 417:   ]
+        final_cor_image[318:336, 388:   ] = miri_img[318:336, 388:   ]
+        final_cor_image[165:318, 376:   ] = miri_img[165:318, 376:   ]
+        final_cor_image[   :165, 362:   ] = miri_img[   :165, 362:   ]
+        
         image_visualization([img_data, final_cor_image], color_style='jet', auto_color=True,
                             title=['Before Stripe Correction','After Stripe Correction'],
                             output_path=f'{self.path}/stripe_corrected_image.png',
@@ -195,7 +257,7 @@ class MIRI_Image():
         print("Scaling wisp and subtract ......")
         wisp_multiplier, wisp_pedestal = minimize_variance(wisp, image_containing_wisps, conv=conv)
         print(f"Wisp multiplier A = {wisp_multiplier}, Wisp pedestal B = {wisp_pedestal}")
-        image_without_wisps = image_containing_wisps - wisp_multiplier * (wisp+wisp_pedestal)
+        image_without_wisps = image_containing_wisps - wisp_multiplier * (wisp + wisp_pedestal)
         image_without_wisps = multiply_by_miri_effective_area(image_without_wisps, nan=False)
         # image_visualization(wisp)
 
@@ -252,7 +314,7 @@ class MIRI_Image():
         sub_img = multiply_by_miri_effective_area(img_data - smoothed_col_med, nan=False)
         record_and_save_data(self.path, 
                              self.fitsname, 
-                             img, pedestal=None, 
+                             sub_img, pedestal=calculate_pedestal(sub_img),
                              suffix='bri_col_sub')
 
     def gather_by_obs(self, suffix):

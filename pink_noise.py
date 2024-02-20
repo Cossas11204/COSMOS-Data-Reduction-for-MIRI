@@ -81,6 +81,9 @@ def remove_striping(masked_image, real_image, sigma=2, axis=1, SWC=True, instrum
         corrected_image = real_image - reconstructed_striping_pattern + calculate_pedestal(masked_image)
 
     else:
+        ## Remove striping pattern along the x-axis
+        masked_image = np.where(masked_image == 0.0, np.nan, masked_image)
+        
         # Calculate the median along the specified axis using sigma clipping
         striping_pattern = np.nanmedian(masked_image, axis=1)
 
@@ -92,8 +95,15 @@ def remove_striping(masked_image, real_image, sigma=2, axis=1, SWC=True, instrum
         
         # Remove the striping pattern from the input image
         corrected_image = real_image - striping_pattern_image + calculate_pedestal(masked_image)
-
+        
+        
+    # print(corrected_image.shape, masked_image.shape, real_image.shape)
+    
+    ## Remove striping pattern along the y-axis with MIR-instrument-specific algorithm
     if instrument == 'lyot':
+        eff_area = fits.open("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits")[1].data[745:, :279]
+        corrected_image = np.where(eff_area == 1, corrected_image, np.nan)
+        
         # Calculate the median along the specified axis using sigma clipping
         striping_pattern = np.nanmedian(corrected_image, axis=0)
 

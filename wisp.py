@@ -177,8 +177,8 @@ class Wisp():
 
     def visualize_frames(self,) -> None:
         # load frames that build up the template
+        frame_path = f"{self.default_storage_path}/Frames_{self.filter}_{self.detector}.fits"
         if os.path.exists(frame_path):
-            frame_path = f"{self.default_storage_path}/Frames_{self.filter}_{self.detector}.fits"
             frames = Wisp.load_frames(frame_path)[self.detector]['WISP']
             image_visualization(frames, auto_color=True, save=False)
             

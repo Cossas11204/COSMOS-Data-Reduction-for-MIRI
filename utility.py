@@ -6,12 +6,16 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
+import math
+
 from photutils import detect_sources, detect_threshold
 
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.convolution import convolve
 from astropy.convolution import Gaussian2DKernel, Box2DKernel
+
+from matplotlib.patches import Rectangle
 
 import datetime
 
@@ -360,7 +364,7 @@ def sigma_clip_replace_with_median(arr, sigma=3):
     return arr_copy
 
 def extract_miri_effective_area():
-    img_data = fits_reader("/mnt/C/JWST/COSMOS/MIRI/F770W/jw01727009001_02201_00001_mirimage/jw01727009001_02201_00001_mirimage_cor_cal.fits")['image']['SCI']
+    img_data = fits_reader("/mnt/C/JWST/COSMOS/MIRI/F770W/jw01727043001_02201_00001_mirimage/jw01727043001_02201_00001_mirimage_cor_cal.fits")['image']['SCI']
     final_cor_image = np.zeros_like(img_data)
     eff_FULL = np.ones_like(img_data)
 
@@ -372,33 +376,56 @@ def extract_miri_effective_area():
 
     # empty space between each parts of miri image detector
     miri_empty_1 = img_data[682:745,    :279]
-    miri_empty_2 = img_data[   :   , 279:355]
+    miri_empty_2 = img_data[   :   , 279:362]
     miri_empty_3 = img_data[   :682, 232:279]
     final_cor_image[682:745,    :279] = miri_empty_1 
-    final_cor_image[   :   , 279:355] = miri_empty_2
+    final_cor_image[   :   , 279:362] = miri_empty_2
     final_cor_image[   :682, 232:279] = miri_empty_3
 
     # detail cuts for miri imaging FULL detector
-    final_cor_image[435:   , 355:   ] = img_data[435:   , 355:   ]
+    final_cor_image[435:   , 362:   ] = img_data[435:   , 362:   ]
     final_cor_image[379:435, 376:   ] = img_data[379:435, 376:   ]
     final_cor_image[375:379, 388:   ] = img_data[375:379, 388:   ]
     final_cor_image[336:375, 417:   ] = img_data[336:375, 417:   ]
     final_cor_image[318:336, 388:   ] = img_data[318:336, 388:   ]
     final_cor_image[165:318, 376:   ] = img_data[165:318, 376:   ]
-    final_cor_image[   :165, 355:   ] = img_data[   :165, 355:   ]
+    final_cor_image[   :165, 362:   ] = img_data[   :165, 362:   ]
 
     # image_visualization([eff_FULL])
-    if not os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits"):
-        eff_FULL[745:   ,    :279] = np.nan
+    if os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits"):
         eff_FULL[   :682,    :232] = np.nan
         eff_FULL[682:745,    :279] = np.nan
-        eff_FULL[   :   , 279:355] = np.nan
+        eff_FULL[   :   , 279:362] = np.nan
         eff_FULL[   :682, 232:279] = np.nan
 
-        eff_FULL[165:435, 355:376] = np.nan
+        eff_FULL[165:435, 362:376] = np.nan
         eff_FULL[318:379, 376:388] = np.nan
         eff_FULL[336:375, 388:417] = np.nan
 
+        # Rectangle properties
+        rect_center = (145.5, 882.5)  # Center of the rectangle
+        rect_width, rect_height = 18, 300  # Width and height of the rectangle
+        rotation_angle = 176  # Rotation angle in degrees
+
+        # Generate mask
+        y, x = np.ogrid[:eff_FULL.shape[0], :eff_FULL.shape[1]]
+        rec_mask = rotated_rect_mask(rect_center[0], rect_center[1], rect_width, rect_height, rotation_angle, x, y)
+
+        # Parameters for the circle
+        c_x, c_y = 145.5, 882.5  # Center of the circle [pix]
+        r = 23                   # Radius of the circle [pix]
+        
+        # Calculate the distance of each element from the center
+        distance_from_center = np.sqrt((x - c_x)**2 + (y - c_y)**2)
+        cir_mask = distance_from_center <= r
+        
+        # combine the mask
+        mask = rec_mask | cir_mask
+        eff_FULL = eff_FULL * mask
+        eff_FULL = np.where(eff_FULL == 1.0, np.nan, eff_FULL)
+        
+        image_visualization(eff_FULL)
+        
         # Create a FITS PrimaryHDU object
         primaryhdu = fits.PrimaryHDU()
 
@@ -412,16 +439,37 @@ def extract_miri_effective_area():
         hdul.writeto("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits", overwrite=True)
 
     if not os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits"):
-        eff_FULL[745:   ,    :279] = 0.0
+        eff_FULL[745:   ,    :279] = 1.0
         eff_FULL[   :682,    :232] = 0.0
         eff_FULL[682:745,    :279] = 0.0
-        eff_FULL[   :   , 279:355] = 0.0
+        eff_FULL[   :   , 279:362] = 0.0
         eff_FULL[   :682, 232:279] = 0.0
 
-        eff_FULL[165:435, 355:376] = 0.0
+        eff_FULL[165:435, 362:376] = 0.0
         eff_FULL[318:379, 376:388] = 0.0
         eff_FULL[336:375, 388:417] = 0.0
 
+        # Rectangle properties
+        rect_center = (145.5, 882.5)  # Center of the rectangle
+        rect_width, rect_height = 18, 300  # Width and height of the rectangle
+        rotation_angle = 176  # Rotation angle in degrees
+
+        # Generate mask
+        y, x = np.ogrid[:eff_FULL.shape[0], :eff_FULL.shape[1]]
+        mask = rotated_rect_mask(rect_center[0], rect_center[1], rect_width, rect_height, rotation_angle, x, y)
+        mask = ~mask
+        eff_FULL = eff_FULL * mask.astype(float)
+
+        # Parameters for the circle
+        c_x, c_y = 145.5, 882.5  # Center of the circle [pix]
+        r = 23                   # Radius of the circle [pix]
+        
+        # Calculate the distance of each element from the center
+        distance_from_center = np.sqrt((x - c_x)**2 + (y - c_y)**2)
+        mask = distance_from_center <= r
+        mask = ~mask
+        eff_FULL = eff_FULL * mask.astype(float)
+    
         # Create a FITS PrimaryHDU object
         primaryhdu = fits.PrimaryHDU()
 
@@ -433,6 +481,22 @@ def extract_miri_effective_area():
         # Create a FITS HDU list and save it to a file
         hdul = fits.HDUList([primaryhdu, miri_eff_area_hdu])
         hdul.writeto("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_zeros.fits", overwrite=True)
+
+# Function to check if a point is inside a rotated rectangle
+def rotated_rect_mask(cx, cy, width, height, angle, x, y):
+    # Translate point to origin
+    x_translated = x - float(cx)
+    y_translated = y - float(cy)
+    
+    # Rotate point
+    angle = math.radians(angle)  # Convert to radians
+    x_rot = x_translated * math.cos(angle) + y_translated * math.sin(angle)
+    y_rot = -x_translated * math.sin(angle) + y_translated * math.cos(angle)
+    
+    # Check if point is inside rectangle
+    mask = (np.abs(x_rot) <= width / 2) & (np.abs(y_rot) <= height / 2)
+    
+    return mask
 
 def multiply_by_miri_effective_area(img_data, nan=True):
     if nan:

@@ -19,7 +19,8 @@ _filter = "F770W"
 detector = ""
 files_to_be_reduced = sorted(glob.glob(rf"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/jw*/*{detector}*_uncal.fits"))
 
-for fits_file_index in trange(len(files_to_be_reduced)):
+# for fits_file_index in trange(len(files_to_be_reduced)):
+for fits_file_index in trange():
     fits_file = files_to_be_reduced[fits_file_index]
     fits_file = fits_file.split('/')[-1]
     folder_name = remove_file_suffix(fits_file)
@@ -35,6 +36,9 @@ for fits_file_index in trange(len(files_to_be_reduced)):
 
         if not os.path.exists(main_path + "_cor.fits"):
             a.remove_pink_noise()
+            
+        if not os.path.exists(main_path + "_cor_lyot.fits"):
+            a.modify_DQ_array_for_lyot()
 
         if not os.path.exists(main_path + "_cor_cal.fits"):
             a.run_MIRI_Image2Pipeline()

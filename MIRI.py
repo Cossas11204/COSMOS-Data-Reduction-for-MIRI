@@ -307,8 +307,14 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     if not os.path.exists(f"/mnt/C/JWST/COSMOS/{instrument}/Reduced"):
         os.mkdir(f"/mnt/C/JWST/COSMOS/{instrument}/Reduced")
 
+    # grab all the input data for pipeline stage 3
+    all_path = glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/o{obs_num}/*_{suffix}.fits")
+    name = all_path[0].split("/")[-1]
+    pid = name[2:7]
+    vis = name[10:13]
+
     # Set the parameters for an Level-3 association 
-    association_pool = jwst.associations.mkpool.mkpool(glob.glob(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/o{obs_num}/*_{suffix}.fits"))
+    association_pool = jwst.associations.mkpool.mkpool(all_path)
     association_rules = jwst.associations.registry.AssociationRegistry()
     association = jwst.associations.generate(association_pool, association_rules)[0]
     
@@ -321,26 +327,33 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     with open(file_name, 'r') as file_handle:
         association = jwst.associations.load_asn(file_handle)
 
-    # Run the JWST Image3Pipeline with the association
-    results = Image3Pipeline.call(association,
-                                  output_dir=f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/",
-                                  logcfg = f'/mnt/C/JWST/COSMOS/{instrument}/Config_and_Logging/Pipeline3.cfg' ,
-                                  save_results=True,
-                                  steps={
-                                         'tweakreg': {'fitgeometry': 'rshift',
-                                                      'use_custom_catalogs': False,# 'abs_refcat': 'GAIADR2'
-                                                      },
-                                         'skymatch': {'skymethod':'global+match',
-                                                      'subtract': False,
-                                                      },
-                                         'resample': {'kernel': 'lanczos3', 
-                                                      'fillval': f'{0}', 
-                                                      'weight_type': 'exptime',
-                                                      },
-                                         'outlier_detection': {# 'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
-                                                               'in_memory' : True,
-                                                               },
-                                         'source_catalog': {'skip': True,
+        # Run the JWST Image3Pipeline with the association
+        results = Image3Pipeline.call(association,
+                                        output_dir=f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/",
+                                        logcfg = f'/mnt/C/JWST/COSMOS/{instrument}/Config_and_Logging/Pipeline3.cfg' ,
+                                        save_results=True,
+                                        steps={
+                                                'tweakreg': {
+                                                            'fitgeometry': 'rshift',
+                                                            'use_custom_catalogs': False,# 'abs_refcat': 'GAIADR2'
                                                             },
-                                        }
-                                  )
+                                                'skymatch': {
+                                                            'skymethod':'global+match',
+                                                            'subtract': True,
+                                                            },
+                                                'resample': {
+                                                            'kernel': 'lanczos3', 
+                                                            'fillval': f'{0}', 
+                                                            'weight_type': 'exptime',
+                                                            'output_file': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/jw{pid}-o{obs_num}_t{vis}_{instrument}-clear-{_filter}-full_i2d.fits",
+                                                            },
+                                                'outlier_detection':    {
+                                                                        'output_dir': f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/midproducts/",
+                                                                        'in_memory' : False,
+                                                                        'save_results' : True,
+                                                                        },
+                                                'source_catalog':   {
+                                                                    'skip': True,
+                                                                    },
+                                            }
+                                        )

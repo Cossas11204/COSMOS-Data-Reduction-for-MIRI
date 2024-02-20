@@ -30,7 +30,7 @@ for fits_file_index in trange(len(files_to_be_reduced)):
         a = MIRI_Image(_filter, filename=fits_file)
         # a.info()
 
-        if not os.path.exists(main_path + "_jump.fits"):
+        if not os.path.exists(main_path + "_rate.fits"):
             a.run_MIRI_Detector1Pipeline()
 
         if not os.path.exists(main_path + "_cor.fits"):

@@ -8,6 +8,8 @@ from astropy.stats import sigma_clip
 
 import astropy.io.fits as fits
 
+from scipy import ndimage
+
 from utility import *
 
 class Wisp():
@@ -186,8 +188,8 @@ class Wisp():
             print("The frames you are trying to visualize is not available!!")
 
     def make_new_wisp_template(self, number_of_frames, include_stars) -> np.array:
-        image_pool = glob.glob(f"/mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/o*/*{self.detector}*cor_cal.fits")
-        # print(image_pool)
+        image_pool = glob.glob(f"/mnt/C/JWST/COSMOS/{self.instrument}/{self.filter}/jw*/*{self.detector}*cor_cal.fits")
+        print(image_pool)
         # discard the frames that are already flagged as bright-star-contaminated 
         image_pool = [img for img in image_pool if img.split("/")[-1] not in self.discarded_slices[self.instrument][f'{self.filter}'][f'{self.detector}']]
         total_number = len(image_pool)
@@ -333,14 +335,15 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
     # Calculating the variance of image that contains wisp
     var_d = np.nanvar(image_containing_wisps.flatten())
     # var_d = np.nanmedian(image_containing_wisps.flatten())
-    # print(var_d)
+    print(f"Variance of original image: {var_d}")
 
     # clip 5-sigma values
     _wisp_template = sigma_clip(wisp_template, 3, maxiters=5)
-    _wisp_template = _wisp_template.filled(fill_value=np.nan)
+    _wisp_template = np.copy(_wisp_template)
     if conv:
-        conv_wisp = convolve(_wisp_template, 
-                            Gaussian2DKernel(x_stddev=7, x_size=15))
+        # conv_wisp = convolve(_wisp_template, 
+        #                     Gaussian2DKernel(x_stddev=2, x_size=15)) # NIRCAM = 7,15 MIRI = 2,15
+        conv_wisp = remove_hot_pix(_wisp_template)
         conv_wisp = multiply_by_miri_effective_area(conv_wisp)
 
         # image_visualization([conv_wisp, _wisp_template], 
@@ -362,13 +365,11 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
                 d_rev = image_containing_wisps - (_wisp_template+wisp_pedestal_grid[i, j]) * wisp_multiplier_grid[i, j]
 
             var_d_rev = np.nanvar(d_rev.flatten())
-            # var_d_rev = np.nanmedian(d_rev.flatten())
             variance_matrix[i, j] = var_d_rev - var_d
 
     best_multiplier_ind, best_pedestal_ind = np.unravel_index(np.argmin(variance_matrix, axis=None), 
                                                               variance_matrix.shape)
 
-    # print(variance_matrix[best_multiplier_ind, best_pedestal_ind])
     min_var_multiplier = wisp_multiplier_grid[best_multiplier_ind, best_pedestal_ind]
     min_var_pedestal = wisp_pedestal_grid[best_multiplier_ind, best_pedestal_ind]
 
@@ -389,3 +390,15 @@ def minimize_variance(wisp_template, image_containing_wisps, conv=False) -> floa
     # plt.show()
     
     return min_var_multiplier, min_var_pedestal
+
+def remove_hot_pix(image, kernel_size=5):
+    # Compute local mean and standard deviation 
+    local_mean = ndimage.uniform_filter(image, size=kernel_size)
+    local_std = np.sqrt(ndimage.uniform_filter(image**2, size=kernel_size) - local_mean**2)
+    local_median = ndimage.median_filter(image, size=kernel_size)
+
+    # Apply 3-sigma rule
+    lower_bound = local_mean - 3 * local_std
+    upper_bound = local_mean + 3 * local_std
+    filtered_image = np.where((image > lower_bound) | (image < upper_bound), local_median, image)  # Replace outliers
+    return filtered_image

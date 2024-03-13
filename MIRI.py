@@ -103,11 +103,9 @@ class MIRI_Image():
                                                 }
                                         )
 
-
+    def combine_lyot_main(self,):
         main_data = fits.open(f"{self.path}/{self.foldername}_cor_lyot_cal.fits")
         lyot_data = fits.open(f"{self.path}/{self.foldername}_cor_main_cal.fits")
-        
-        print(main_data, lyot_data)
         
         for hdu_ind in [1, 2, 3, 4, 5, 6, 7]:
             main_data[hdu_ind].data[745:, :279] = lyot_data[hdu_ind].data[745:, :279]
@@ -124,7 +122,7 @@ class MIRI_Image():
         
         # empty space between each parts of miri image detector
         dqarray[682:745,    :279] = mask_value
-        dqarray[   :   , 279:362] = mask_value
+        dqarray[   :   , 279:365] = mask_value
         dqarray[   :682, 232:279] = mask_value
         
         dqarray2 = dqarray.copy()
@@ -150,13 +148,13 @@ class MIRI_Image():
         un_cor_miri_corona_4qpm = img_data[:682, :232]
         
         un_cor_miri_img = np.zeros(img_data.shape)
-        un_cor_miri_img[435:   , 362:   ] = img_data[435:   , 362:   ]
+        un_cor_miri_img[435:   , 365:   ] = img_data[435:   , 365:   ]
         un_cor_miri_img[379:435, 376:   ] = img_data[379:435, 376:   ]
         un_cor_miri_img[375:379, 388:   ] = img_data[375:379, 388:   ]
         un_cor_miri_img[336:375, 417:   ] = img_data[336:375, 417:   ]
         un_cor_miri_img[318:336, 388:   ] = img_data[318:336, 388:   ]
         un_cor_miri_img[165:318, 376:   ] = img_data[165:318, 376:   ]
-        un_cor_miri_img[   :165, 362:   ] = img_data[   :165, 362:   ]
+        un_cor_miri_img[   :165, 365:   ] = img_data[   :165, 365:   ]
         
         # mask sources for different parts of miri image detector
         masked_corona_lyot_image = mask_sources(un_cor_miri_corona_lyot, sigma_values=[5, 2], snr=3)
@@ -181,13 +179,13 @@ class MIRI_Image():
         final_cor_image[:682, :232] = 0 # masked_corona_4qpm_image
 
         # MIRI Main array 
-        final_cor_image[435:   , 362:   ] = miri_img[435:   , 362:   ]
+        final_cor_image[435:   , 365:   ] = miri_img[435:   , 365:   ]
         final_cor_image[379:435, 376:   ] = miri_img[379:435, 376:   ]
         final_cor_image[375:379, 388:   ] = miri_img[375:379, 388:   ]
         final_cor_image[336:375, 417:   ] = miri_img[336:375, 417:   ]
         final_cor_image[318:336, 388:   ] = miri_img[318:336, 388:   ]
         final_cor_image[165:318, 376:   ] = miri_img[165:318, 376:   ]
-        final_cor_image[   :165, 362:   ] = miri_img[   :165, 362:   ]
+        final_cor_image[   :165, 365:   ] = miri_img[   :165, 365:   ]
         
         image_visualization([img_data, final_cor_image], color_style='jet', auto_color=True,
                             title=['Before Stripe Correction','After Stripe Correction'],
@@ -200,7 +198,10 @@ class MIRI_Image():
 
     def load_corrected_data(self) -> dict:
         return fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_cal.fits")
-
+    
+    def load_dewisped_data(self) -> dict:
+        return fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_wsp.fits")
+    
     def wisp_removal(self, debug=False, conv=False,
                     visualize_frames=False, 
                     visualize_template=False,
@@ -231,9 +232,9 @@ class MIRI_Image():
         try:
             wisp = Wisp_obj.load_existing_wisp(f'{Wisp_obj.default_storage_path}/Wisp_{self.filter}_{self.mode}.fits')
         
-        except FileNotFoundError:
+        except (FileNotFoundError, TypeError) as e:
             print(f"Wisp file for {self.filter}_{self.mode} not found. Creating a new wisp template.")
-            Wisp_obj.make_new_wisp_template(15, include_stars) # number_of_frames = 15
+            Wisp_obj.make_new_wisp_template(50, include_stars) # number_of_frames = 15
             Wisp_obj.save_new_wisp_template() # Save the new wisp template
             wisp = Wisp_obj.load_existing_wisp(f'{Wisp_obj.default_storage_path}/Wisp_{self.filter}_{self.mode}.fits')
 
@@ -253,24 +254,38 @@ class MIRI_Image():
         # Save the new wisp template
         wisp = multiply_by_miri_effective_area(wisp[Wisp_obj.detector]['WISP'], nan=False)
         image_containing_wisps = fits_reader(f"{self.path}/{remove_file_suffix(self.fitsname)}_cor_cal.fits")[Wisp_obj.detector]['SCI']
+        # image_visualization(
+        #     [wisp, image_containing_wisps], 
+        #     auto_color=True, share_scale=True, show=False,
+        #     vmin_value=30, vmax_value=95, img_dpi=150,
+        # )
 
         print("Scaling wisp and subtract ......")
         wisp_multiplier, wisp_pedestal = minimize_variance(wisp, image_containing_wisps, conv=conv)
         print(f"Wisp multiplier A = {wisp_multiplier}, Wisp pedestal B = {wisp_pedestal}")
         image_without_wisps = image_containing_wisps - wisp_multiplier * (wisp + wisp_pedestal)
         image_without_wisps = multiply_by_miri_effective_area(image_without_wisps, nan=False)
-        # image_visualization(wisp)
 
         # mask sources
         image_without_wisps_for_vis = mask_sources(image_without_wisps)
         image_containing_wisps_for_vis = mask_sources(image_containing_wisps)
-
+        image_containing_wisps_for_vis = sigma_clip(image_containing_wisps_for_vis, 3)
+        
         # visualize the original image, wisp template, and result image
         comp_list = [image_containing_wisps_for_vis, wisp, image_without_wisps_for_vis]
         comp_list = [multiply_by_miri_effective_area(data, nan=True) for data in comp_list]
-        title = [f"sigma ={np.round(np.nanstd(sigma_clip(data, 3)), 3)} \n median={np.round(np.nanmedian(sigma_clip(data, 3)), 3)}" for data in comp_list]
+        
+        title = []
+        for data in comp_list:
+            clipped_data = sigma_clip(data, 3)
+            clipped_data = clipped_data[~np.isnan(clipped_data)]
+            median_ = np.round(np.nanmedian(clipped_data), 3)
+            sigma_ = np.round(np.nanstd(clipped_data), 3)
+            title.append(f"sigma ={sigma_} \n median={median_}")
+        # print(title)
+        
         image_visualization(comp_list, auto_color=True, share_scale=True, show=False,
-                            vmin_value=50, vmax_value=95, img_dpi=300, scale_data=image_containing_wisps_for_vis,
+                            vmin_value=30, vmax_value=95, img_dpi=150, scale_data=image_containing_wisps_for_vis,
                             save=True, output_path=f'{self.path}/wisp_corrected_image.png',
                             title=title
                             )
@@ -374,7 +389,7 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
     name = all_path[0].split("/")[-1]
     pid = name[2:7]
     vis = name[10:13]
-
+    print("Creating Association.")
     # Set the parameters for an Level-3 association 
     association_pool = jwst.associations.mkpool.mkpool(all_path)
     association_rules = jwst.associations.registry.AssociationRegistry()
@@ -385,10 +400,11 @@ def run_Pipeline_3(instrument, _filter, obs_num, suffix):
 
     with open(file_name, 'w') as file_handle:
         file_handle.write(serialized)
+    print("Association Created & Saved.")
     
     with open(file_name, 'r') as file_handle:
         association = jwst.associations.load_asn(file_handle)
-
+        print("Association Loaded...")
         # Run the JWST Image3Pipeline with the association
         results = Image3Pipeline.call(association,
                                         output_dir=f"/mnt/C/JWST/COSMOS/{instrument}/Reduced/{_filter}/",

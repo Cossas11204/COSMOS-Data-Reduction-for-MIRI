@@ -19,15 +19,16 @@ _filter = "F770W"
 detector = ""
 files_to_be_reduced = sorted(glob.glob(rf"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/jw*/*{detector}*_uncal.fits"))
 
-# for fits_file_index in trange(len(files_to_be_reduced)):
-for fits_file_index in trange():
+for fits_file_index in trange(len(files_to_be_reduced)):
     fits_file = files_to_be_reduced[fits_file_index]
     fits_file = fits_file.split('/')[-1]
     folder_name = remove_file_suffix(fits_file)
     main_path = os.path.join(f"/mnt/C/JWST/COSMOS/{instrument}/{_filter}/", folder_name, folder_name)
 
-    
     if not os.path.exists(main_path + "_bri_col_sub.fits"):
+        if not os.path.exists(main_path + "_uncal.fits"):
+            print(f"{fits_file} does not exists, please consider to re-download it.")
+            continue
         a = MIRI_Image(_filter, filename=fits_file)
         # a.info()
 

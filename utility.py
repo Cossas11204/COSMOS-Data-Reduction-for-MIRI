@@ -392,7 +392,8 @@ def extract_miri_effective_area():
     final_cor_image[   :165, 362:   ] = img_data[   :165, 362:   ]
 
     # image_visualization([eff_FULL])
-    if os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits"):
+    # if not os.path.exists("/mnt/C/JWST/COSMOS/MIRI/MIRI_eff_area_nan.fits"):
+    if True:
         eff_FULL[   :682,    :232] = np.nan
         eff_FULL[682:745,    :279] = np.nan
         eff_FULL[   :   , 279:362] = np.nan
@@ -423,7 +424,8 @@ def extract_miri_effective_area():
         mask = rec_mask | cir_mask
         eff_FULL = eff_FULL * mask
         eff_FULL = np.where(eff_FULL == 1.0, np.nan, eff_FULL)
-        
+        eff_FULL = np.where(eff_FULL == 0.0, 1.0, eff_FULL)
+
         image_visualization(eff_FULL)
         
         # Create a FITS PrimaryHDU object
